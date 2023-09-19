@@ -17,16 +17,23 @@ import {
   SSAOPlugin,
   BloomPlugin,
   GammaCorrectionPlugin,
-  addBasePlugins,
   mobileAndTabletCheck,
-  CanvasSnipperPlugin,
 } from "webgi";
 
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
+import { scrollAnimation } from "../lib/scroll-animation";
+
+gsap.registerPlugin(ScrollTrigger);
 
 function WebGiViewer() {
   const canvasRef = useRef(null);
+
+  const memoizedScrollAnimation = useCallback((position, target, onUpdate) => {
+    if (position && target && onUpdate) {
+      scrollAnimation(position, target, onUpdate);
+    }
+  }, []); // Pass empty array to execute this function once
 
   const setupViewer = useCallback(async () => {
     // Initialize the viewer
@@ -37,35 +44,45 @@ function WebGiViewer() {
     // Add some plugins
     const manager = await viewer.addPlugin(AssetManagerPlugin);
 
+    const camera = viewer.scene.activeCamera;
+    const position = camera.position;
+    const target = camera.target;
+
     // Add plugins individually.
-    // await viewer.addPlugin(GBufferPlugin)
-    // await viewer.addPlugin(new ProgressivePlugin(32))
-    // await viewer.addPlugin(new TonemapPlugin(!viewer.useRgbm))
-    // await viewer.addPlugin(GammaCorrectionPlugin)
-    // await viewer.addPlugin(SSRPlugin)
-    // await viewer.addPlugin(SSAOPlugin)
-    // await viewer.addPlugin(DiamondPlugin)
-    // await viewer.addPlugin(FrameFadePlugin)
-    // await viewer.addPlugin(GLTFAnimationPlugin)
-    // await viewer.addPlugin(GroundPlugin)
-    // await viewer.addPlugin(BloomPlugin)
-    // await viewer.addPlugin(TemporalAAPlugin)
-    // await viewer.addPlugin(AnisotropyPlugin)
-    // and many more...
-
-    // or use this to add all main ones at once.
-    await addBasePlugins(viewer);
-
-    // Add more plugins not available in base, like CanvasSnipperPlugin which has helpers to download an image of the canvas.
-    await viewer.addPlugin(CanvasSnipperPlugin);
-
-    // This must be called once after all plugins are added.
+    await viewer.addPlugin(GBufferPlugin);
+    await viewer.addPlugin(new ProgressivePlugin(32));
+    await viewer.addPlugin(new TonemapPlugin(true));
+    await viewer.addPlugin(GammaCorrectionPlugin);
+    await viewer.addPlugin(SSRPlugin);
+    await viewer.addPlugin(SSAOPlugin);
+    await viewer.addPlugin(BloomPlugin);
     viewer.renderer.refreshPipeline();
-
-    // Import and add a GLB file.
     await manager.addFromPath("scene-black.glb");
 
     viewer.getPlugin(TonemapPlugin).config.clipBackground = true;
+
+    /* Users are not be able to rotate the model using mouse */
+    viewer.scene.activeCamera.setCameraOptions({ controlsEnabled: false });
+
+    /* Set the top location when site is loaded */
+    window.scrollTo(0, 0);
+
+    let needsUpdate = true;
+
+    /* Update the camers position */
+    const onUpdate = () => {
+      needsUpdate = true;
+      viewer.setDirty();
+    };
+    /* Add listener to update the postion of camera */
+    viewer.addEventListener("preFrame", () => {
+      if (needsUpdate) {
+        camera.positionTargetUpdated(true);
+        needsUpdate = false;
+      }
+    });
+
+    memoizedScrollAnimation(position, target, onUpdate);
   }, []);
 
   /* Calling d viewer */
